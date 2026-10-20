@@ -34,17 +34,17 @@
   </div>
 
   <script>
-    // ==========================================
-    // 1. IMAGE ASSET CONFIGURATION
-    // ==========================================
-    // Room Backgrounds (place files in public/)
+  
+    // IMAGE ASSET CONFIGURATION!!!!!!!!!!
+    
+    // Room Backgrounds will add later.........
     const townBg = new Image();
     townBg.src = "town_bg.png";
 
     const plazaBg = new Image();
     plazaBg.src = "plaza_bg.png";
 
-    // Player Still Sprite Image (place file in public/)
+    // Sprite soda
     const penguinSprite = new Image();
     penguinSprite.src = "penguin.png";
 
@@ -52,9 +52,9 @@
     const SPRITE_WIDTH = 50;  
     const SPRITE_HEIGHT = 50;
 
-    // ==========================================
-    // 2. WEBSOCKET & CANVAS INITIALIZATION
-    // ==========================================
+    
+    // 2. WEBSOCKET & CANVAS INITIALIZATION >:))
+    
     const protocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
     const wsUrl = protocol + location.host;
     const socket = new WebSocket(wsUrl);
@@ -131,7 +131,6 @@
             msgTimer: null
           };
           
-          // Reply back to newly joined player with our position
           if (id !== myClientId && myClientId && players[myClientId]) {
             const myPos = players[myClientId];
             socket.send(`MOVE:${myPos.room}:${myClientId}:${myPos.targetX}:${myPos.targetY}:${myPos.color}`);
@@ -157,7 +156,7 @@
       }
     };
 
-    // Click canvas to move penguin smoothly
+    // Click canvas to move penguin
     canvas.addEventListener("click", function(e) {
       if (!myClientId || !players[myClientId]) return;
       
@@ -183,13 +182,12 @@
     sendBtn.addEventListener("click", sendChatMessage);
     chatInput.addEventListener("keypress", (e) => { if (e.key === "Enter") sendChatMessage(); });
 
-    // ==========================================
-    // 3. RENDER & WADDLE ANIMATION LOOP
-    // ==========================================
+    // RENDER & WADDLE LOOP!!!!!1!!111!!!!
+  
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // --- 1. ROOM BACKGROUND RENDERING ---
+      // ROOM BACKGROUND RENDERING
       if (currentRoom === "Town") {
         if (townBg.complete && townBg.naturalWidth !== 0) {
           ctx.drawImage(townBg, 0, 0, canvas.width, canvas.height);
@@ -214,11 +212,11 @@
         }
       }
 
-      // --- 2. PLAYER UPDATE & RENDERING ---
+      // PLAYER UPDATE & RENDERING11!!!!
       for (let id in players) {
         const p = players[id];
 
-        // Smooth point-and-click movement calculation
+        // point and click movement calculation
         const dx = p.targetX - p.x;
         const dy = p.targetY - p.y;
         const dist = Math.hypot(dx, dy);
@@ -227,21 +225,21 @@
           p.x += (dx / dist) * p.speed;
           p.y += (dy / dist) * p.speed;
           p.isMoving = true;
-          p.facingLeft = dx < 0; // Flip sprite horizontally when walking left
+          p.facingLeft = dx < 0; // fglip sprite horizontally when walking left
           p.waddleTimer++;
         } else {
           p.x = p.targetX;
           p.y = p.targetY;
           p.isMoving = false;
-          p.waddleTimer = 0; // Reset waddle angle when stationary
+          p.waddleTimer = 0; // reset waddle angle when stationary
         }
 
-        // Draw Player if in the current room
+        // draw player if in the current room
         if (p.room === currentRoom) {
           let waddleAngle = 0;
           let waddleOffsetY = 0;
 
-          // Calculate waddle tilt & hop when moving
+          // clculate waddle tilt and hop when moving
           if (p.isMoving) {
             waddleAngle = Math.sin(p.waddleTimer * 0.2) * 0.15;          // Side-to-side tilt angle
             waddleOffsetY = Math.abs(Math.sin(p.waddleTimer * 0.2)) * -6; // Up/down bounce offset
@@ -251,13 +249,13 @@
           ctx.translate(p.x, p.y + waddleOffsetY);
           ctx.rotate(waddleAngle);
 
-          // Horizontal flip when facing left
+          // horizontal flip when facing left
           if (p.facingLeft) {
             ctx.scale(-1, 1);
           }
 
           if (penguinSprite.complete && penguinSprite.naturalWidth !== 0) {
-            // Render user's still sprite image centered at player coordinates
+            // render user' still sprite image centered at player coordinates
             ctx.drawImage(
               penguinSprite,
               -SPRITE_WIDTH / 2,
@@ -266,7 +264,7 @@
               SPRITE_HEIGHT
             );
           } else {
-            // Fallback canvas drawing if penguin.png isn't uploaded yet
+            // fallback canvas drawing if penguin.png isn't uploaded yet
             ctx.beginPath();
             ctx.arc(0, 0, 20, 0, Math.PI * 2);
             ctx.fillStyle = p.color || "#333";
@@ -291,12 +289,12 @@
 
           ctx.restore();
 
-          // Player Name Tag (Always upright above player)
+          // player nametag
           ctx.fillStyle = "#000";
           ctx.font = "bold 12px sans-serif";
-          ctx.fillText(`P-${id}`, p.x - 12, p.y + 35);
+          ctx.fillText(`Player-${id}`, p.x - 25, p.y + 35);
 
-          // Chat Bubble (Always upright above player)
+          // Chat buubble
           if (p.msg) {
             ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
             ctx.fillRect(p.x - 50, p.y - 50, 100, 22);

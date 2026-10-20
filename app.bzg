@@ -2,24 +2,36 @@ include("lib/http.bzg");
 
 var server = http(8000);
 
+// HTTP ROUTING
 server.get = function (path, data) {
     print("GET path: " + path);
+
     if (path == "/") {
         server.sendFile("public/index.html");
-    } else {
+    } 
+    // Serve image files and static assets from public/
+    else if (path == "/penguin.png") {
+        server.sendFile("public/penguin.png");
+    } 
+    else if (path == "/town_bg.png") {
+        server.sendFile("public/town_bg.png");
+    } 
+    else if (path == "/plaza_bg.png") {
+        server.sendFile("public/plaza_bg.png");
+    } 
+    else {
         server.sendFile("public/404.html");
     }
 };
 
+// WEBSOCKET HANDLERS
 server.onConnect = function (clientId) {
     print("Penguin connected! Client ID: " + clientId);
-    // Send welcome and assign Client ID
     server.send(clientId, "SYSTEM:WELCOME:" + clientId);
 };
 
 server.onData = function (message, clientId) {
     print("Payload from Client " + clientId + ": " + message);
-    // Broadcast all payload messages (which now include room info)
     server.sendAll(message);
 };
 
