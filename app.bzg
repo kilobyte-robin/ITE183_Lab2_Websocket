@@ -1,0 +1,31 @@
+include("lib/http.bzg");
+
+var server = http(8000);
+
+server.get = function (path, data) {
+    print("GET path: " + path);
+    if (path == "/") {
+        server.sendFile("public/index.html");
+    } else {
+        server.sendFile("public/404.html");
+    }
+};
+
+server.onConnect = function (clientId) {
+    print("Penguin connected! Client ID: " + clientId);
+    // Send welcome and assign Client ID
+    server.send(clientId, "SYSTEM:WELCOME:" + clientId);
+};
+
+server.onData = function (message, clientId) {
+    print("Payload from Client " + clientId + ": " + message);
+    // Broadcast all payload messages (which now include room info)
+    server.sendAll(message);
+};
+
+server.onDisconnect = function (clientId) {
+    print("Penguin disconnected! Client ID: " + clientId);
+    server.sendAll("LEAVE:" + clientId);
+};
+
+server.run();

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Club Penguin BSL Multi-Room - Animated</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; background-color: #2c3e50; color: white; margin: 0; padding: 20px; }
+    #gameCanvas { background-color: #a0e0ff; border: 4px solid #fff; border-radius: 8px; cursor: pointer; }
+    #controls { margin-top: 15px; display: flex; justify-content: center; gap: 10px; }
+    #roomControls { margin-bottom: 10px; }
+    input { padding: 10px; width: 300px; border-radius: 4px; border: none; }
+    button { padding: 10px 20px; border-radius: 4px; border: none; background-color: #27ae60; color: white; font-weight: bold; cursor: pointer; }
+    .roomBtn { background-color: #2980b9; margin: 0 5px; }
+    .activeRoom { background-color: #f39c12; }
+    #status { font-weight: bold; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+
+  <h2>Club Penguin BSL Room</h2>
+  <div id="status">Connecting...</div>
+
+  <div id="roomControls">
+    <span>Current Room: </span>
+    <button id="btnTown" class="roomBtn activeRoom" onclick="switchRoom('Town')">Town</button>
+    <button id="btnPlaza" class="roomBtn" onclick="switchRoom('Plaza')">Plaza</button>
+  </div>
+
+  <canvas id="gameCanvas" width="700" height="400"></canvas>
+
+  <div id="controls">
+    <input type="text" id="chatInput" placeholder="Click canvas to walk or type chat here..." disabled />
+    <button id="sendBtn" disabled>Chat</button>
+  </div>
+
+  <script>
+    // ==========================================
+    // 1. WALK CYCLE & SPRITE CONFIGURATION
+    // ==========================================
+    // Set to true if you are using custom walk cycle image sprites
+    const USE_CUSTOM_SPRITES = false; 
+
+    // Option A: Spritesheet Configuration (e.g. 4 horizontal frames in one image)
+    const walkSpriteSheet = new Image();
+    walkSpriteSheet.src = "penguin_walk.png"; // Save image inside public/ directory
+    const TOTAL_WALK_FRAMES = 4;              // Number of walk animation frames
+    const FRAME_WIDTH = 64;                   // Width of a single frame in pixels
+    const FRAME_HEIGHT = 64;                  // Height of a single frame in pixels
+
+    // ==========================================
+    // 2. WEBSOCKET & CANVAS INITIALIZATION
+    // ==========================================
+    const protocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    const wsUrl = protocol + location.host;
+    const socket = new WebSocket(wsUrl);
+
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const statusDiv = document.getElementById("status");
+    const chatInput = document.getElementById("chatInput");
+    const sendBtn = document.getElementById("sendBtn");
+
+    let myClientId = null;
+    let currentRoom = "Town";
+    let players = {}; // { id: { room, x, y, targetX, targetY, speed, isMoving, facingLeft, frameIndex, frameTimer, color, msg, msgTimer } }
+
+    const colors = ["#e74c3c", "#3498db", "#9b59b6", "#f1c40f", "#e67e22", "#1abc9c"];
+
+    function switchRoom(newRoom) {
+      if (currentRoom === newRoom) return;
+
+      currentRoom = newRoom;
+      document.getElementById("btnTown").classList.toggle("activeRoom", currentRoom === "Town");
+      document.getElementById("btnPlaza").classList.toggle("activeRoom", currentRoom === "Plaza");
+
+      if (myClientId && players[myClientId]) {
+        const startX = 350;
+        const startY = 200;
+        const color = colors[myClientId % colors.length];
+        
+        // Reset local player position on room switch
+        players[myClientId].room = currentRoom;
+        players[myClientId].x = startX;
+        players[myClientId].y = startY;
+        players[myClientId].targetX = startX;
+        players[myClientId].targetY = startY;
+
+        socket.send(`MOVE:${currentRoom}:${myClientId}:${startX}:${startY}:${color}`);
+      }
+    }
+
+    socket.onopen = function() {
+      statusDiv.textContent = "Status: Connected";
+      chatInput.disabled = false;
+      sendBtn.disabled = false;
+    };
+
+    socket.onmessage = function(event) {
+      const data = event.data;
+
+      if (data.startsWith("SYSTEM:WELCOME:")) {
+        myClientId = data.split(":")[2];
+        const startX = Math.floor(Math.random() * 500) + 100;
+        const startY = Math.floor(Math.random() * 200) + 100;
+        const color = colors[myClientId % colors.length];
+
+        socket.send(`MOVE:${currentRoom}:${myClientId}:${startX}:${startY}:${color}`);
+      } 
+      else if (data.startsWith("MOVE:")) {
+        const [_, room, id, targetX, targetY, color] = data.split(":");
+        const tx = parseInt(targetX);
+        const ty = parseInt(targetY);
+
+        if (!players[id]) {
+          // New player initial spawn (start at destination directly)
+          players[id] = {
+            room: room,
+            x: tx,
+            y: ty,
+            targetX: tx,
+            targetY: ty,
+            speed: 3,            // Movement speed in pixels per frame
+            isMoving: false,
+            facingLeft: false,
+            frameIndex: 0,
+            frameTimer: 0,
+            color: color,
+            msg: "",
+            msgTimer: null
+          };
+          
+          // Reply back with our location so new player sees us
+          if (id !== myClientId && myClientId && players[myClientId]) {
+            const myPos = players[myClientId];
+            socket.send(`MOVE:${myPos.room}:${myClientId}:${myPos.targetX}:${myPos.targetY}:${myPos.color}`);
+          }
+        } else {
+          // Update player destination & room
+          players[id].room = room;
+          players[id].targetX = tx;
+          players[id].targetY = ty;
+          players[id].color = color;
+        }
+      } 
+      else if (data.startsWith("CHAT:")) {
+        const [_, room, id, text] = data.split(":");
+        if (players[id] && room === currentRoom) {
+          players[id].msg = text;
+          clearTimeout(players[id].msgTimer);
+          players[id].msgTimer = setTimeout(() => { players[id].msg = ""; }, 4000);
+        }
+      } 
+      else if (data.startsWith("LEAVE:")) {
+        const [_, id] = data.split(":");
+        delete players[id];
+      }
+    };
+
+    // Click canvas to move penguin smoothly
+    canvas.addEventListener("click", function(e) {
+      if (!myClientId || !players[myClientId]) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const targetX = Math.round(e.clientX - rect.left);
+      const targetY = Math.round(e.clientY - rect.top);
+      const color = colors[myClientId % colors.length];
+
+      // Update local target destination immediately
+      players[myClientId].targetX = targetX;
+      players[myClientId].targetY = targetY;
+
+      // Broadcast destination over WebSocket
+      socket.send(`MOVE:${currentRoom}:${myClientId}:${targetX}:${targetY}:${color}`);
+    });
+
+    function sendChatMessage() {
+      const text = chatInput.value.trim();
+      if (text && socket.readyState === WebSocket.OPEN) {
+        socket.send(`CHAT:${currentRoom}:${myClientId}:${text}`);
+        chatInput.value = "";
+      }
+    }
+
+    sendBtn.addEventListener("click", sendChatMessage);
+    chatInput.addEventListener("keypress", (e) => { if (e.key === "Enter") sendChatMessage(); });
+
+    // ==========================================
+    // 3. RENDER & MOVEMENT ANIMATION LOOP
+    // ==========================================
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Background room rendering
+      if (currentRoom === "Town") {
+        ctx.fillStyle = "#a0e0ff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#2c3e50";
+        ctx.font = "bold 20px sans-serif";
+        ctx.fillText("Welcome to TOWN", 260, 40);
+      } else {
+        ctx.fillStyle = "#f39c12";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 20px sans-serif";
+        ctx.fillText("Welcome to PLAZA", 260, 40);
+      }
+
+      // Update & Draw Players
+      for (let id in players) {
+        const p = players[id];
+
+        // 1. UPDATE SMOOTH MOVEMENT
+        const dx = p.targetX - p.x;
+        const dy = p.targetY - p.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > p.speed) {
+          p.x += (dx / dist) * p.speed;
+          p.y += (dy / dist) * p.speed;
+          p.isMoving = true;
+          p.facingLeft = dx < 0; // Turn left or right depending on movement
+
+          // Advance walk cycle animation timer
+          p.frameTimer++;
+          if (p.frameTimer % 6 === 0) { // Cycle frame every 6 ticks (~10fps animation)
+            p.frameIndex = (p.frameIndex + 1) % TOTAL_WALK_FRAMES;
+          }
+        } else {
+          // Reached destination
+          p.x = p.targetX;
+          p.y = p.targetY;
+          p.isMoving = false;
+          p.frameIndex = 0; // Reset to standing/idle frame
+        }
+
+        // 2. DRAW PLAYER IF IN CURRENT ROOM
+        if (p.room === currentRoom) {
+          ctx.save();
+          ctx.translate(p.x, p.y);
+
+          // Horizontal Flip if facing left
+          if (p.facingLeft) {
+            ctx.scale(-1, 1);
+          }
+
+          if (USE_CUSTOM_SPRITES && walkSpriteSheet.complete) {
+            // Option A: Custom Spritesheet Rendering
+            const sourceX = p.frameIndex * FRAME_WIDTH;
+            ctx.drawImage(
+              walkSpriteSheet,
+              sourceX, 0, FRAME_WIDTH, FRAME_HEIGHT, // Source image crop
+              -FRAME_WIDTH / 2, -FRAME_HEIGHT / 2, FRAME_WIDTH, FRAME_HEIGHT // Canvas position
+            );
+          } else {
+            // Option B: Procedural Canvas Waddle Fallback
+            // Calculates a waddle/bobbing angle while moving
+            let waddleAngle = 0;
+            let waddleOffsetY = 0;
+
+            if (p.isMoving) {
+              waddleAngle = Math.sin(p.frameTimer * 0.3) * 0.15; // Side wobble
+              waddleOffsetY = Math.abs(Math.sin(p.frameTimer * 0.3)) * -4; // Step hop
+            }
+
+            ctx.rotate(waddleAngle);
+
+            // Penguin Outer Body
+            ctx.beginPath();
+            ctx.arc(0, waddleOffsetY, 20, 0, Math.PI * 2);
+            ctx.fillStyle = p.color || "#333";
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#000";
+            ctx.stroke();
+
+            // Penguin Belly
+            ctx.beginPath();
+            ctx.arc(0, waddleOffsetY + 3, 11, 0, Math.PI * 2);
+            ctx.fillStyle = "#ffffff";
+            ctx.fill();
+
+            // Beak
+            ctx.beginPath();
+            ctx.fillStyle = "#f39c12";
+            ctx.moveTo(10, waddleOffsetY - 2);
+            ctx.lineTo(22, waddleOffsetY + 2);
+            ctx.lineTo(10, waddleOffsetY + 6);
+            ctx.closePath();
+            ctx.fill();
+          }
+
+          ctx.restore();
+
+          // Player Name Tag (Always upright)
+          ctx.fillStyle = "#000";
+          ctx.font = "12px sans-serif";
+          ctx.fillText(`P-${id}`, p.x - 12, p.y + 35);
+
+          // Chat Bubble (Always upright)
+          if (p.msg) {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+            ctx.fillRect(p.x - 50, p.y - 50, 100, 22);
+            ctx.fillStyle = "#fff";
+            ctx.font = "12px sans-serif";
+            ctx.fillText(p.msg, p.x - 45, p.y - 35);
+          }
+        }
+      }
+      requestAnimationFrame(draw);
+    }
+
+    draw();
+  </script>
+</body>
+</html>
